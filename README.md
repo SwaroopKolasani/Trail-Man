@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Trail-Man: AI-Powered Job Application Tracker
 
 Trail-Man is a comprehensive job application tracking system built with Next.js, FastAPI, and MySQL. It helps job seekers organize their applications, manage resumes, and track their job search progress.
@@ -299,3 +300,6 @@ For support and questions:
 - [ ] Mobile application
 - [ ] Analytics dashboard
 - [ ] Team collaboration features 
+=======
+
+>>>>>>> origin/main
