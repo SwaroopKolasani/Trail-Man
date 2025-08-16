@@ -1,0 +1,16 @@
+{
+  "python.pythonPath": "./venv/bin/python",
+  "python.defaultInterpreterPath": "./venv/bin/python",
+  "python.analysis.extraPaths": [
+    "./app",
+    "./venv/lib/python3.12/site-packages"
+  ],
+  "python.analysis.autoSearchPaths": true,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.terminal.activateEnvironment": true,
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": false,
+  "python.linting.flake8Enabled": true,
+  "python.analysis.typeCheckingMode": "basic"
+} 

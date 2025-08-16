@@ -1,0 +1,164 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: trail-man-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password123
+      MYSQL_DATABASE: trail_man_db
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./Trail_Man_db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - trail-man-network
+  
+  redis:
+    image: redis:7-alpine
+    container_name: trail-man-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - trail-man-network
+    command: redis-server --appendonly yes
+  
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trail-man-backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+      - redis
+      - selenium
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password123@mysql:3306/trail_man_db
+      - REDIS_URL=redis://redis:6379/0
+      - CHROME_BIN=/usr/bin/chromium
+      - CHROME_DRIVER_PATH=/usr/bin/chromedriver
+      - SELENIUM_ENABLED=true
+      - HEADLESS_BROWSER=true
+      - DOCKER_ENV=true
+      - SELENIUM_REMOTE_URL=http://selenium:4444/wd/hub
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    networks:
+      - trail-man-network
+    command: uvicorn app.main:app --host 0.0.0.0 --reload
+  
+  celery-worker:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trail-man-celery-worker
+    depends_on:
+      - mysql
+      - redis
+      - selenium
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password123@mysql:3306/trail_man_db
+      - REDIS_URL=redis://redis:6379/0
+      - CHROME_BIN=/usr/bin/chromium
+      - CHROME_DRIVER_PATH=/usr/bin/chromedriver
+      - SELENIUM_ENABLED=true
+      - HEADLESS_BROWSER=true
+      - DOCKER_ENV=true
+      - SELENIUM_REMOTE_URL=http://selenium:4444/wd/hub
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    networks:
+      - trail-man-network
+    command: celery -A app.core.celery_app worker --loglevel=info --queues=scraping,notifications,maintenance,reports
+    restart: unless-stopped
+  
+  celery-beat:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trail-man-celery-beat
+    depends_on:
+      - mysql
+      - redis
+      - selenium
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password123@mysql:3306/trail_man_db
+      - REDIS_URL=redis://redis:6379/0
+      - CHROME_BIN=/usr/bin/chromium
+      - CHROME_DRIVER_PATH=/usr/bin/chromedriver
+      - SELENIUM_ENABLED=true
+      - HEADLESS_BROWSER=true
+      - DOCKER_ENV=true
+      - SELENIUM_REMOTE_URL=http://selenium:4444/wd/hub
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    networks:
+      - trail-man-network
+    command: celery -A app.core.celery_app beat --loglevel=info
+    restart: unless-stopped
+  
+  celery-flower:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trail-man-celery-flower
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    networks:
+      - trail-man-network
+    command: celery -A app.core.celery_app flower --port=5555
+    restart: unless-stopped
+  
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: trail-man-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    env_file:
+      - ./frontend/.env.local
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - trail-man-network
+    command: npm run dev
+
+  selenium:
+    image: seleniarm/standalone-chromium:latest
+    container_name: trail-man-selenium
+    ports:
+      - "4444:4444"
+    environment:
+      - SE_VNC_NO_PASSWORD=1
+      - SE_NODE_MAX_SESSIONS=4
+      - SE_NODE_SESSION_TIMEOUT=300
+    volumes:
+      - /dev/shm:/dev/shm
+    networks:
+      - trail-man-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  trail-man-network:
+    driver: bridge 

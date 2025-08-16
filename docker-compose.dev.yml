@@ -1,0 +1,129 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: trail-man-mysql-dev
+    environment:
+      MYSQL_ROOT_PASSWORD: password123
+      MYSQL_DATABASE: trail_man_db
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data_dev:/var/lib/mysql
+      - ./Trail_Man_db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - trail-man-network-dev
+  
+  redis:
+    image: redis:7-alpine
+    container_name: trail-man-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - trail-man-network-dev
+    command: redis-server --appendonly yes
+  
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: trail-man-backend-dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password123@mysql:3306/trail_man_db
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    networks:
+      - trail-man-network-dev
+    command: uvicorn app.main:app --host 0.0.0.0 --reload
+  
+  # Simple celery worker without Selenium/Chrome for development
+  celery-worker:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: trail-man-celery-worker-dev
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password123@mysql:3306/trail_man_db
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    networks:
+      - trail-man-network-dev
+    command: celery -A app.core.celery_app worker --loglevel=info --queues=latex,notifications,maintenance,reports
+    restart: unless-stopped
+  
+  celery-beat:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: trail-man-celery-beat-dev
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password123@mysql:3306/trail_man_db
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    networks:
+      - trail-man-network-dev
+    command: celery -A app.core.celery_app beat --loglevel=info
+    restart: unless-stopped
+  
+  celery-flower:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: trail-man-celery-flower-dev
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    networks:
+      - trail-man-network-dev
+    command: celery -A app.core.celery_app flower --port=5555
+    restart: unless-stopped
+  
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: trail-man-frontend-dev
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    env_file:
+      - ./frontend/.env.local
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - trail-man-network-dev
+    command: npm run dev
+
+volumes:
+  mysql_data_dev:
+  redis_data_dev:
+
+networks:
+  trail-man-network-dev:
+    driver: bridge 
